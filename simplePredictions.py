@@ -24,22 +24,11 @@ df['MA_20'] = df['Close'].rolling(20).mean()
 df['Volume'] = df['Volume']
 df['VIX'] = vix.reindex(df.index)
 
-# 3. Compute Put/Call ratio (by volume)
-opt = yf.Ticker(ticker).options
-option_chain = yf.Ticker(ticker).option_chain(opt[0])  # get first expiry options chain
-
-put_volume = option_chain.puts['volume'].sum()
-call_volume = option_chain.calls['volume'].sum()
-
-pcr = put_volume / call_volume if call_volume != 0 else np.nan
-df['PCR'] = pcr  # This is a single scalar; you’ll want a time series for modeling
-
-
-# 4. Drop NaNs
+# 3. Drop NaNs
 df.dropna(inplace=True)
 
-# 5. Scale features
-features = ['Close','RSI','MACD','Signal','MA_20','Volume','VIX','PCR']
+# 4. Scale features
+features = ['Close','RSI','MACD','Signal','MA_20','Volume','VIX']
 scaler = MinMaxScaler()
 scaled = scaler.fit_transform(df[features])
 X, y = [], []
@@ -55,7 +44,7 @@ y_train, y_test = y[:split], y[split:]
 X_train = X_train.reshape(len(X_train), seq_len, len(features))
 X_test = X_test.reshape(len(X_test), seq_len, len(features))
 
-# 6. Build LSTM model
+# 5. Build LSTM model
 model = Sequential([
     LSTM(64, return_sequences=True, input_shape=(seq_len, len(features))),
     Dropout(0.2),
@@ -68,18 +57,21 @@ cb = [EarlyStopping(patience=5, restore_best_weights=True),
       ModelCheckpoint('best_model.h5', save_best_only=True)]
 model.fit(X_train, y_train, validation_split=0.1, epochs=50, batch_size=32, callbacks=cb)
 
-# 7. Predict & Undo Scaling
+# 6. Predict & Undo Scaling
 y_pred = model.predict(X_test)
-y_test_actual = scaler.inverse_transform(np.hstack((y_test.reshape(-1,1),np.zeros((len(y_test),len(features)-1)))) )[:,0]
+y_test_actual = scaler.inverse_transform(np.hstack((y_test.reshape(-1,1),np.zeros((len(y_test),len(features)-1)))))[:,0]
 y_pred_actual = scaler.inverse_transform(np.hstack((y_pred, np.zeros((len(y_pred), len(features)-1)))))[:,0]
 
-# 8. Metrics & chart
-print("MAE:", mean_absolute_error(y_test_actual,y_pred_actual))
+# 7. Metrics & chart
+print("MAE:", mean_absolute_error(y_test_actual, y_pred_actual))
 print("R2:", r2_score(y_test_actual, y_pred_actual))
-plt.plot(y_test_actual,label='Actual'); plt.plot(y_pred_actual,label='Predicted'); plt.legend(); plt.show()
+plt.plot(y_test_actual, label='Actual')
+plt.plot(y_pred_actual, label='Predicted')
+plt.legend()
+plt.show()
 
-# 9. Print raw table with Open, Actual, Predicted, RSI, MACD, VIX, PCR
+# 8. Print raw table with Open, Actual, Predicted, RSI, MACD, VIX
 offset = seq_len + split
-table = df[['Open','Close','RSI','MACD','VIX','PCR']].iloc[offset:].copy()
+table = df[['Open','Close','RSI','MACD','VIX']].iloc[offset:].copy()
 table['Predicted'] = y_pred_actual
-print(table.tail(10)[['Open','Close','Predicted','RSI','MACD','VIX','PCR']])
+print(table.tail(10)[['Open','Close','Predicted','RSI','MACD','VIX']])

@@ -1,0 +1,11 @@
+yfinance
+pandas
+numpy
+ta
+scikit-learn
+tensorflow
+matplotlib
+nltk
+finnhub-python
+newsapi-python
+vaderSentiment
