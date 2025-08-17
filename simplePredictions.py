@@ -4,7 +4,7 @@ import numpy as np
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.metrics import mean_absolute_error, r2_score, accuracy_score
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
@@ -31,47 +31,101 @@ df.dropna(inplace=True)
 features = ['Close','RSI','MACD','Signal','MA_20','Volume','VIX']
 scaler = MinMaxScaler()
 scaled = scaler.fit_transform(df[features])
-X, y = [], []
+X, y_price, y_dir = [], [], []
 seq_len = 60
-for i in range(len(scaled) - seq_len):
-    X.append(scaled[i:i+seq_len])
-    y.append(scaled[i+seq_len, 0])  # predicting close price
 
-X, y = np.array(X), np.array(y)
+for i in range(len(scaled) - seq_len - 1):
+    X.append(scaled[i:i+seq_len])
+    # Predict price (Close)
+    y_price.append(scaled[i+seq_len, 0])
+    # Predict direction: 1 if next close > current close else 0
+    y_dir.append(1 if scaled[i+seq_len,0] > scaled[i+seq_len-1,0] else 0)
+
+X, y_price, y_dir = np.array(X), np.array(y_price), np.array(y_dir)
+
+# Split train/test
 split = int(0.8*len(X))
 X_train, X_test = X[:split], X[split:]
-y_train, y_test = y[:split], y[split:]
+y_price_train, y_price_test = y_price[:split], y_price[split:]
+y_dir_train, y_dir_test = y_dir[:split], y_dir[split:]
+
+# Reshape for LSTM
 X_train = X_train.reshape(len(X_train), seq_len, len(features))
 X_test = X_test.reshape(len(X_test), seq_len, len(features))
 
-# 5. Build LSTM model
-model = Sequential([
+# 5a. Build LSTM model for price
+model_price = Sequential([
     LSTM(64, return_sequences=True, input_shape=(seq_len, len(features))),
     Dropout(0.2),
     LSTM(64),
     Dropout(0.2),
     Dense(1)
 ])
-model.compile('adam', 'mse')
+model_price.compile('adam', 'mse')
 cb = [EarlyStopping(patience=5, restore_best_weights=True),
-      ModelCheckpoint('best_model.h5', save_best_only=True)]
-model.fit(X_train, y_train, validation_split=0.1, epochs=50, batch_size=32, callbacks=cb)
+      ModelCheckpoint('best_model_price.h5', save_best_only=True)]
+model_price.fit(X_train, y_price_train, validation_split=0.1, epochs=50, batch_size=32, callbacks=cb)
+
+# 5b. Build LSTM model for direction
+model_dir = Sequential([
+    LSTM(64, return_sequences=True, input_shape=(seq_len, len(features))),
+    Dropout(0.2),
+    LSTM(64),
+    Dropout(0.2),
+    Dense(1, activation='sigmoid')
+])
+model_dir.compile('adam', 'binary_crossentropy', metrics=['accuracy'])
+cb_dir = [EarlyStopping(patience=5, restore_best_weights=True),
+          ModelCheckpoint('best_model_dir.h5', save_best_only=True)]
+model_dir.fit(X_train, y_dir_train, validation_split=0.1, epochs=50, batch_size=32, callbacks=cb_dir)
 
 # 6. Predict & Undo Scaling
-y_pred = model.predict(X_test)
-y_test_actual = scaler.inverse_transform(np.hstack((y_test.reshape(-1,1),np.zeros((len(y_test),len(features)-1)))))[:,0]
-y_pred_actual = scaler.inverse_transform(np.hstack((y_pred, np.zeros((len(y_pred), len(features)-1)))))[:,0]
+y_pred_price = model_price.predict(X_test)
+y_pred_price_actual = scaler.inverse_transform(
+    np.hstack((y_pred_price, np.zeros((len(y_pred_price), len(features)-1))))
+)[:,0]
 
-# 7. Metrics & chart
-print("MAE:", mean_absolute_error(y_test_actual, y_pred_actual))
-print("R2:", r2_score(y_test_actual, y_pred_actual))
-plt.plot(y_test_actual, label='Actual')
-plt.plot(y_pred_actual, label='Predicted')
-plt.legend()
-plt.show()
+y_test_price_actual = scaler.inverse_transform(
+    np.hstack((y_price_test.reshape(-1,1), np.zeros((len(y_price_test), len(features)-1))))
+)[:,0]
 
-# 8. Print raw table with Open, Actual, Predicted, RSI, MACD, VIX
+y_pred_dir = model_dir.predict(X_test).flatten()
+y_pred_dir_class = (y_pred_dir > 0.5).astype(int)
+
+# 7. Metrics
+print("Price MAE:", mean_absolute_error(y_test_price_actual, y_pred_price_actual))
+print("Price R2:", r2_score(y_test_price_actual, y_pred_price_actual))
+print("Direction Accuracy:", accuracy_score(y_dir_test, y_pred_dir_class))
+
+# 8a. Price prediction reporting
 offset = seq_len + split
-table = df[['Open','Close','RSI','MACD','VIX']].iloc[offset:].copy()
-table['Predicted'] = y_pred_actual
-print(table.tail(10)[['Open','Close','Predicted','RSI','MACD','VIX']])
+table_price = df[['Open', 'High', 'Low', 'Close', 'RSI', 'MACD', 'VIX']].iloc[offset:].copy()
+
+# Align lengths
+min_len = min(len(table_price), len(y_pred_price_actual))
+table_price = table_price.iloc[-min_len:]
+y_pred_price_actual = y_pred_price_actual[-min_len:]
+
+table_price['PredictedPrice'] = y_pred_price_actual
+print("\n--- Price Prediction Report ---")
+print(table_price.tail(10)[['Open','High','Low','Close','PredictedPrice','RSI','MACD','VIX']])
+
+# 8b. Direction prediction reporting
+table_dir = df[['Close']].iloc[offset:].copy()
+
+# Align lengths
+min_len = min(len(table_dir), len(y_pred_dir_class))
+table_dir = table_dir.iloc[-min_len:]
+y_pred_dir_class = y_pred_dir_class[-min_len:]
+
+table_dir['PredictedDirection'] = y_pred_dir_class
+print("\n--- Direction Prediction Report ---")
+print(table_dir.tail(10))
+
+# 9. Plot results
+plt.figure(figsize=(10,6))
+plt.plot(y_test_price_actual, label='Actual Price')
+plt.plot(y_pred_price_actual, label='Predicted Price')
+plt.legend()
+plt.title("AAPL Price Prediction (Test Set)")
+plt.show()
