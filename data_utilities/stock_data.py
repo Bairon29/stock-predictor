@@ -3,69 +3,74 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime
 
-# -------------------------
-# Utility Functions
-# -------------------------
+# === Setup Storage ===
+def setup_storage(folder_name="stock_data", gdrive_path=None):
+    """
+    Sets up Google Drive storage path locally.
+    Example gdrive_path: '/Users/yourusername/Library/CloudStorage/GoogleDrive-your@email/My Drive'
+    """
+    if gdrive_path is None:
+        raise ValueError("⚠️ Please provide your local Google Drive path")
 
-def load_existing_data(symbol: str, folder: str = "data") -> pd.DataFrame:
-    """Load existing CSV data for a symbol if it exists, else return empty DataFrame."""
+    base_path = os.path.join(gdrive_path, folder_name)
+    if not os.path.exists(base_path):
+        os.makedirs(base_path)
+
+    return base_path
+
+
+# === Fetch Data ===
+def fetch_data(symbol, start="2016-01-01", end=None):
+    if end is None:
+        end = datetime.today().strftime("%Y-%m-%d")
+    print(f"📥 Fetching {symbol} data from {start} to {end}")
+    return yf.download(symbol, start=start, end=end)
+
+
+# === Load Data ===
+def load_data(symbol, folder):
     filepath = os.path.join(folder, f"{symbol}.csv")
     if os.path.exists(filepath):
+        print(f"📂 Loading existing data for {symbol} from {filepath}")
         return pd.read_csv(filepath, index_col="Date", parse_dates=True)
-    return pd.DataFrame()
+    return None
 
 
-def fetch_new_data(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """Fetch new stock data from yfinance for a given symbol and date range."""
-    df = yf.download(symbol, start=start, end=end)
-    if df.empty:
-        print(f"⚠️ No data returned for {symbol} between {start} and {end}")
-    return df
-
-
-def merge_data(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
-    """Merge old and new data, remove duplicates, and keep sorted by date."""
-    if existing.empty:
-        combined = new
-    else:
-        combined = pd.concat([existing, new])
-    # Remove duplicate dates if overlap
+# === Merge Data ===
+def merge_data(old_df, new_df):
+    if old_df is None:
+        return new_df
+    combined = pd.concat([old_df, new_df])
     combined = combined[~combined.index.duplicated(keep="last")]
-    combined = combined.sort_index()
+    combined.sort_index(inplace=True)
     return combined
 
 
-def save_data(symbol: str, df: pd.DataFrame, folder: str = "data") -> None:
-    """Save DataFrame to CSV in the data folder."""
-    os.makedirs(folder, exist_ok=True)
+# === Save Data ===
+def save_data(df, symbol, folder):
     filepath = os.path.join(folder, f"{symbol}.csv")
     df.to_csv(filepath, index=True)
     print(f"✅ Saved {symbol} data to {filepath}")
 
 
-def update_symbol_data(symbol: str, start: str, end: str, folder: str = "data"):
-    """Load existing, fetch new, merge, and save final dataset for a symbol."""
-    print(f"📥 Updating {symbol} data...")
-    existing = load_existing_data(symbol, folder)
-    new_data = fetch_new_data(symbol, start, end)
-    combined = merge_data(existing, new_data)
-    save_data(symbol, combined, folder)
+# === Update Stock ===
+def update_stock(symbol, start="2016-01-01", end=None, folder="stock_data", gdrive_path=None):
+    folder_path = setup_storage(folder, gdrive_path)
+    old_data = load_data(symbol, folder_path)
+    new_data = fetch_data(symbol, start, end)
+    combined = merge_data(old_data, new_data)
+    save_data(combined, symbol, folder_path)
+    return combined
 
 
-def update_multiple_symbols(symbols: list, start: str, end: str, folder: str = "data"):
-    """Update multiple stock symbols in one go."""
-    for symbol in symbols:
-        update_symbol_data(symbol, start, end, folder)
-
-
-# -------------------------
-# Main Script
-# -------------------------
-
+# === Example Usage ===
 if __name__ == "__main__":
-    # Example: download AAPL and AMD history
+    # 👇 CHANGE this to your actual Google Drive local path
+    GDRIVE_PATH = "/Users/yourusername/Library/CloudStorage/GoogleDrive-your@email/My Drive"
+    storage_folder = "stock_data"
     symbols = ["AAPL", "AMD"]
-    start_date = "2016-01-01"
-    end_date = datetime.today().strftime("%Y-%m-%d")
 
-    update_multiple_symbols(symbols, start=start_date, end=end_date)
+    for sym in symbols:
+        df = update_stock(sym, start="2016-01-01", end="2024-01-01",
+                          folder=storage_folder, gdrive_path=GDRIVE_PATH)
+        print(df.tail())
