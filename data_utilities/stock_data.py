@@ -4,19 +4,19 @@ import yfinance as yf
 from datetime import datetime
 
 # === Setup Storage ===
-def setup_storage(folder_name="stock_data", gdrive_path=None):
-    """
-    Sets up Google Drive storage path locally.
-    Example gdrive_path: '/Users/yourusername/Library/CloudStorage/GoogleDrive-your@email/My Drive'
-    """
-    if gdrive_path is None:
-        raise ValueError("⚠️ Please provide your local Google Drive path")
+# def setup_storage(folder_name="stock_data", gdrive_path=None):
+#     """
+#     Sets up Google Drive storage path locally.
+#     Example gdrive_path: '/Users/yourusername/Library/CloudStorage/GoogleDrive-your@email/My Drive'
+#     """
+#     if gdrive_path is None:
+#         raise ValueError("⚠️ Please provide your local Google Drive path")
 
-    base_path = os.path.join(gdrive_path, folder_name)
-    if not os.path.exists(base_path):
-        os.makedirs(base_path)
+#     base_path = os.path.join(gdrive_path, folder_name)
+#     if not os.path.exists(base_path):
+#         os.makedirs(base_path)
 
-    return base_path
+#     return base_path
 
 
 # === Fetch Data ===
@@ -54,8 +54,7 @@ def save_data(df, symbol, folder):
 
 
 # === Update Stock ===
-def update_stock(symbol, start="2016-01-01", end=None, folder="stock_data", gdrive_path=None):
-    folder_path = setup_storage(folder, gdrive_path)
+def update_stock(symbol, start="2016-01-01", end=None, folder_path="stock_data"):
     old_data = load_data(symbol, folder_path)
     new_data = fetch_data(symbol, start, end)
     combined = merge_data(old_data, new_data)
