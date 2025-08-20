@@ -4,7 +4,9 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from googleapiclient.http import MediaIoBaseDownload
 import pickle
+import io
 
 # If modifying scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -20,7 +22,7 @@ def authenticate_drive():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                '../google_config.json', SCOPES)
+                'google_config.json', SCOPES)
             creds = flow.run_local_server(port=0)
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
@@ -41,11 +43,30 @@ def upload_file(service, file_path, drive_folder_id=None):
     print(f"Uploaded {file_path} with File ID: {file.get('id')}")
     return file.get('id')
 
-def download_file(service, file_id, save_path):
+def download_file(service, file_path, file_id):
     request = service.files().get_media(fileId=file_id)
-    with open(save_path, 'wb') as f:
+    with open(file_path, 'wb') as f:
         downloader = MediaIoBaseDownload(f, request)
         done = False
         while not done:
             status, done = downloader.next_chunk()
             print(f"Download {int(status.progress() * 100)}%.")
+
+def download_file_to_variable(service, file_id):
+    file_buffer = io.BytesIO()
+    request = service.files().get_media(fileId=file_id)
+    downloader = MediaIoBaseDownload(file_buffer, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    file_buffer.seek(0)
+    return file_buffer.read()
+            
+# === Example Usage ===
+if __name__ == "__main__":
+    pass
+    # service = authenticate_drive()
+    # Upload a file
+    # upload_file(service, 'google_drive/example.txt', drive_folder_id='13psIjHiLQsottsNjP3WGLaXiFMPTt-38')
+    # Download a file
+    # download_file(service, 'mmmm', '13psIjHiLQsottsNjP3WGLaXiFMPTt-38')

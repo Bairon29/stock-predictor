@@ -1,1 +1,3 @@
 google_config*
+.venv/*
+token.pickle
