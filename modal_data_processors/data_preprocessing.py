@@ -17,8 +17,6 @@ def add_technical_indicators(stockDataFrame, vix):
     stockDataFrame['MA_20'] = stockDataFrame['Close'].rolling(20).mean()
     stockDataFrame['Volume'] = stockDataFrame['Volume']
     stockDataFrame['VIX'] = vix.reindex(stockDataFrame.index)
-    # 3. Drop NaNs
-    stockDataFrame.dropna(inplace=True)
     
     return stockDataFrame
 

@@ -4,7 +4,7 @@ from keras.layers import LSTM, Dropout, Dense
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 
 
-def build_lstm_model(neurons, return_sequences, input_shape, dropout_rate, output_units):
+def build_lstm_model(neurons, return_sequences, input_shape, dropout_rate, output_units, activation=None):
     """
     Builds a Sequential LSTM model with specified parameters.
     Args:
@@ -21,7 +21,7 @@ def build_lstm_model(neurons, return_sequences, input_shape, dropout_rate, outpu
         Dropout(dropout_rate),
         LSTM(neurons),
         Dropout(dropout_rate),
-        Dense(output_units)
+        Dense(output_units, activation=activation)
     ])
     
     return model
@@ -82,18 +82,20 @@ def predict(model, X_test):
     """
     predictions = model.predict(X_test)
     return predictions
-def inverse_transform_zeros_reshaped(scaler, features, data, y_price_test, num_features):
+
+def inverse_transform_zeros_reshaped(scaler, features, data, y_price_test):
     """
     Inverse transforms the scaled data back to original scale.
     Args:
         scaler (MinMaxScaler): Scaler used to scale the data.
+        features (list): List of feature names used in scaling.
         data (array): Scaled data to inverse transform.
         num_features (int): Number of features in the original data.
     Returns:
         inverse_data (array): Inverse transformed data.
     """ 
     inverse_data = scaler.inverse_transform(
-        np.hstack((data, np.zeros((len(data), num_features - 1))))
+        np.hstack((data, np.zeros((len(data), len(features) - 1))))
     )[:, 0]
     # Reshape to original
     y_test_price_actual = scaler.inverse_transform(
