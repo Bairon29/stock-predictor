@@ -21,6 +21,10 @@ def add_technical_indicators(stockDataFrame, vix):
     stockDataFrame.dropna(inplace=True)
     
     return stockDataFrame
+
+def drop_na_rows(df):
+    df.dropna(inplace=True)
+    return df
     
 def scale_features(df, features):
     # 4. Scale features
@@ -47,7 +51,7 @@ def split_train_test_data(sample_date_set, y_price, y_dir, train_size=0.8):
     train_set, test_set = sample_date_set[:split], sample_date_set[split:]
     y_price_train, y_price_test = y_price[:split], y_price[split:]
     y_dir_train, y_dir_test = y_dir[:split], y_dir[split:]
-    return train_set, test_set, y_price_train, y_price_test, y_dir_train, y_dir_test
+    return split, train_set, test_set, y_price_train, y_price_test, y_dir_train, y_dir_test
 
 def reshape_for_lstm(train_set, test_set, seq_len, num_features):
     # Reshape for LSTM
