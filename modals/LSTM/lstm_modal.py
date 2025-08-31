@@ -83,22 +83,58 @@ def predict(model, X_test):
     predictions = model.predict(X_test)
     return predictions
 
-def inverse_transform_zeros_reshaped(scaler, features, data, y_price_test):
+def inverse_transform_zeros_reshaped(scaler, features, data, y_price_test, last_seq_features):
     """
-    Inverse transforms the scaled data back to original scale.
+    Inverse transform LSTM predictions back to original scale using the last known sequence values
+    for padding other features instead of zeros.
+    """
+    num_features = len(features)
+    
+    # Prepare array for predictions
+    pad_data = np.zeros((len(data), num_features))
+    pad_data[:, 0] = data.flatten()  # predicted Close
+    if last_seq_features is not None:
+        # fill other features with last known sequence values
+        pad_data[:, 1:] = last_seq_features[:, -1, 1:]  # last timestep of sequence
+
+    inverse_data = scaler.inverse_transform(pad_data)[:, 0]
+
+    # Similarly for y_price_test
+    pad_y = np.zeros((len(y_price_test), num_features))
+    pad_y[:, 0] = y_price_test.flatten()
+    if last_seq_features is not None:
+        pad_y[:, 1:] = last_seq_features[:, -1, 1:]
+
+    y_test_price_actual = scaler.inverse_transform(pad_y)[:, 0]
+
+    return inverse_data, y_test_price_actual
+
+def inverse_transform_last_seq(scaler, features, y_pred_scaled, y_test_scaled, last_seq_features):
+    """
+    Inverse transforms scaled Close prices using the last timestep of each sequence
+    to fill the other features.
+    
     Args:
         scaler (MinMaxScaler): Scaler used to scale the data.
-        features (list): List of feature names used in scaling.
-        data (array): Scaled data to inverse transform.
-        num_features (int): Number of features in the original data.
+        features (list): List of all features used in scaling.
+        y_pred_scaled (np.array): Scaled predicted Close prices.
+        y_test_scaled (np.array): Scaled actual Close prices for test set.
+        last_seq_features (np.array): Last row of each X_test sequence (shape: [num_samples, num_features]).
+        
     Returns:
-        inverse_data (array): Inverse transformed data.
-    """ 
-    inverse_data = scaler.inverse_transform(
-        np.hstack((data, np.zeros((len(data), len(features) - 1))))
-    )[:, 0]
-    # Reshape to original
-    y_test_price_actual = scaler.inverse_transform(
-        np.hstack((y_price_test.reshape(-1,1), np.zeros((len(y_price_test), len(features)-1))))
-    )[:,0]
-    return inverse_data, y_test_price_actual
+        y_pred_actual, y_test_actual (np.array): Inverse-transformed Close prices.
+    """
+    # Prepare padded arrays
+    pad_pred = np.zeros((len(y_pred_scaled), len(features)))
+    pad_pred[:, 0] = y_pred_scaled.flatten()        # predicted Close
+    pad_pred[:, 1:] = last_seq_features[:, 1:]     # other features from last timestep
+
+    pad_test = np.zeros((len(y_test_scaled), len(features)))
+    pad_test[:, 0] = y_test_scaled.flatten()       # actual Close
+    pad_test[:, 1:] = last_seq_features[:, 1:]     # other features from last timestep
+
+    # Inverse transform
+    y_pred_actual = scaler.inverse_transform(pad_pred)[:, 0]
+    y_test_actual = scaler.inverse_transform(pad_test)[:, 0]
+
+    return y_pred_actual, y_test_actual

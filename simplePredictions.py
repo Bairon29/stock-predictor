@@ -26,6 +26,7 @@ from modals.LSTM.lstm_modal import (
     train_model,
     predict,
     inverse_transform_zeros_reshaped,
+    inverse_transform_last_seq
 )
 
 # 1. Download AAPL & VIX
@@ -142,11 +143,11 @@ model_dir = build_lstm_model(
     input_shape=(seq_len, len(STOCK_FEATURES)),
     dropout_rate=dropout_rate,
     output_units=output_units,
-    activation="sigmoid"
+    activation="softmax"
 )
 
 # model_dir.compile("adam", "binary_crossentropy", metrics=["accuracy", "Precision", "Recall"])
-model_dir = compile_model(model_dir, loss="binary_crossentropy", optimizer="adam", metrics=["accuracy", "Precision", "Recall"])
+model_dir = compile_model(model_dir, loss="categorical_crossentropy", optimizer="adam", metrics=["accuracy", "Precision", "Recall"])
 
 # cb_dir = [
 #     EarlyStopping(patience=5, restore_best_weights=True),
@@ -188,9 +189,9 @@ y_pred_price = predict(model_price, X_test)
 #         )
 #     )
 # )[:, 0]
-
-y_pred_price_actual, y_test_price_actual = inverse_transform_zeros_reshaped(
-    scaler, STOCK_FEATURES, y_pred_price, y_price_test
+last_seq_features = X_test[:, -1, :]
+y_pred_price_actual, y_test_price_actual = inverse_transform_last_seq(
+    scaler, STOCK_FEATURES, y_pred_price, y_price_test, last_seq_features
 )
 
 # y_pred_dir = model_dir.predict(X_test).flatten()

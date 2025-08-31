@@ -30,18 +30,45 @@ def scale_features(df, features):
     scaled = scaler.fit_transform(df[features])
     return scaled, scaler
     
-def create_sequences(scaled_data, seq_len):
+# def create_sequences(scaled_data, seq_len):
+#     sample_inputs, y_price, y_dir = [], [], []
+
+#     for i in range(len(scaled_data) - seq_len - 1):
+#         sample_inputs.append(scaled_data[i:i+seq_len])
+#         # Predict price (Close)
+#         y_price.append(scaled_data[i+seq_len, 0])
+#         # Predict direction: 1 if next close > current close else 0
+#         y_dir.append(1 if scaled_data[i+seq_len,0] > scaled_data[i+seq_len-1,0] else 0)
+
+#     sample_inputs, y_price, y_dir = np.array(sample_inputs), np.array(y_price), np.array(y_dir)
+#     return sample_inputs, y_price, y_dir
+
+def create_sequences(scaled_data, seq_len, hold_threshold=0.001):
+    """
+    hold_threshold: minimum relative change to consider as Buy/Sell
+                    e.g., 0.001 = 0.1%
+    """
     sample_inputs, y_price, y_dir = [], [], []
 
     for i in range(len(scaled_data) - seq_len - 1):
         sample_inputs.append(scaled_data[i:i+seq_len])
         # Predict price (Close)
         y_price.append(scaled_data[i+seq_len, 0])
-        # Predict direction: 1 if next close > current close else 0
-        y_dir.append(1 if scaled_data[i+seq_len,0] > scaled_data[i+seq_len-1,0] else 0)
 
-    sample_inputs, y_price, y_dir = np.array(sample_inputs), np.array(y_price), np.array(y_dir)
-    return sample_inputs, y_price, y_dir
+        # Price change from previous step
+        price_diff = scaled_data[i+seq_len, 0] - scaled_data[i+seq_len-1, 0]
+
+        # Compute direction with Hold
+        if price_diff > hold_threshold:
+            direction = 1  # Buy
+        elif price_diff < -hold_threshold:
+            direction = 0  # Sell
+        else:
+            direction = 2  # Hold
+
+        y_dir.append(direction)
+
+    return np.array(sample_inputs), np.array(y_price), np.array(y_dir)
 
 def split_train_test_data(sample_date_set, y_price, y_dir, train_size=0.8):
     # Split train/test
