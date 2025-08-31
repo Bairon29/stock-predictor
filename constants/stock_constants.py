@@ -1,0 +1,1 @@
+STOCK_FEATURES = ['Close','RSI','MACD','Signal','MA_20','Volume','VIX']

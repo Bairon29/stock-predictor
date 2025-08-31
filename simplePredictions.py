@@ -9,58 +9,76 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import matplotlib.pyplot as plt
+from utilities.data_helpers import load_data
+from modal_data_processors.data_preprocessing import add_technical_indicators, drop_na_rows, scale_features, create_sequences, split_train_test_data, reshape_for_lstm
+from constants.stock_constants import STOCK_FEATURES
+from modals.LSTM.lstm_modal import build_lstm_model, compile_model, prepare_callback, train_model
 
 # 1. Download AAPL & VIX
 ticker = 'AAPL'
-df = yf.download(ticker, '2020-01-01', '2024-01-01')
-vix = yf.download('^VIX', '2020-01-01', '2024-01-01')['Close']
+# df = yf.download(ticker, '2020-01-01', '2024-01-01')
+df = load_data(ticker, "/Volumes/Bairon/ModalTrain/Data")
+vix = load_data('^VIX', "/Volumes/Bairon/ModalTrain/Data")['Close']
 
 # 2. Compute Indicators
-df['RSI'] = RSIIndicator(df['Close'].squeeze()).rsi()
-macd = MACD(df['Close'].squeeze())
-df['MACD'] = macd.macd()
-df['Signal'] = macd.macd_signal()
-df['MA_20'] = df['Close'].rolling(20).mean()
-df['Volume'] = df['Volume']
-df['VIX'] = vix.reindex(df.index)
+# df['RSI'] = RSIIndicator(df['Close'].squeeze()).rsi()
+# macd = MACD(df['Close'].squeeze())
+# df['MACD'] = macd.macd()
+# df['Signal'] = macd.macd_signal()
+# df['MA_20'] = df['Close'].rolling(20).mean()
+# df['Volume'] = df['Volume']
+# df['VIX'] = vix.reindex(df.index)
+df = add_technical_indicators(df, vix)
 
 # 3. Drop NaNs
-df.dropna(inplace=True)
+# df.dropna(inplace=True)
+df = drop_na_rows(df)
 
 # 4. Scale features
-features = ['Close','RSI','MACD','Signal','MA_20','Volume','VIX']
-scaler = MinMaxScaler()
-scaled = scaler.fit_transform(df[features])
+# features = ['Close','RSI','MACD','Signal','MA_20','Volume','VIX']
+# scaler = MinMaxScaler()
+# scaled = scaler.fit_transform(df[STOCK_FEATURES])
+scaled, scaler = scale_features(df, STOCK_FEATURES)
+
+# 5. Create sequences
 X, y_price, y_dir = [], [], []
 seq_len = 60
 
-for i in range(len(scaled) - seq_len - 1):
-    X.append(scaled[i:i+seq_len])
-    # Predict price (Close)
-    y_price.append(scaled[i+seq_len, 0])
-    # Predict direction: 1 if next close > current close else 0
-    y_dir.append(1 if scaled[i+seq_len,0] > scaled[i+seq_len-1,0] else 0)
+# for i in range(len(scaled) - seq_len - 1):
+#     X.append(scaled[i:i+seq_len])
+#     # Predict price (Close)
+#     y_price.append(scaled[i+seq_len, 0])
+#     # Predict direction: 1 if next close > current close else 0
+#     y_dir.append(1 if scaled[i+seq_len,0] > scaled[i+seq_len-1,0] else 0)
 
-X, y_price, y_dir = np.array(X), np.array(y_price), np.array(y_dir)
+# X, y_price, y_dir = np.array(X), np.array(y_price), np.array(y_dir)
+
+X, y_price, y_dir = create_sequences(scaled, seq_len)
+
+
 
 # Split train/test
-split = int(0.8*len(X))
-X_train, X_test = X[:split], X[split:]
-y_price_train, y_price_test = y_price[:split], y_price[split:]
-y_dir_train, y_dir_test = y_dir[:split], y_dir[split:]
+# split = int(0.8*len(X))
+# X_train, X_test = X[:split], X[split:]
+# y_price_train, y_price_test = y_price[:split], y_price[split:]
+# y_dir_train, y_dir_test = y_dir[:split], y_dir[split:]
+split, X_train, X_test, y_price_train, y_price_test, y_dir_train, y_dir_test = split_train_test_data(X, y_price, y_dir, train_size=0.8)
+
 
 # Reshape for LSTM
-X_train = X_train.reshape(len(X_train), seq_len, len(features))
-X_test = X_test.reshape(len(X_test), seq_len, len(features))
+# X_train = X_train.reshape(len(X_train), seq_len, len(STOCK_FEATURES))
+# X_test = X_test.reshape(len(X_test), seq_len, len(STOCK_FEATURES))
+X_train, new_test_set = reshape_for_lstm(X_train, X_test, seq_len, len(STOCK_FEATURES))
 
 # 5a. Build LSTM model for price
 model_price = Sequential([
-    LSTM(64, return_sequences=True, input_shape=(seq_len, len(features))),
+    LSTM(64, return_sequences=True, input_shape=(seq_len, len(STOCK_FEATURES))),
     Dropout(0.2),
     LSTM(64),
     Dropout(0.2),
     Dense(1)
 ])
+
 model_price.compile('adam', 'mse')
 cb = [EarlyStopping(patience=5, restore_best_weights=True),
       ModelCheckpoint('best_model_price.h5', save_best_only=True)]
@@ -68,7 +86,7 @@ model_price.fit(X_train, y_price_train, validation_split=0.1, epochs=50, batch_s
 
 # 5b. Build LSTM model for direction
 model_dir = Sequential([
-    LSTM(64, return_sequences=True, input_shape=(seq_len, len(features))),
+    LSTM(64, return_sequences=True, input_shape=(seq_len, len(STOCK_FEATURES))),
     Dropout(0.2),
     LSTM(64),
     Dropout(0.2),
@@ -82,11 +100,11 @@ model_dir.fit(X_train, y_dir_train, validation_split=0.1, epochs=50, batch_size=
 # 6. Predict & Undo Scaling
 y_pred_price = model_price.predict(X_test)
 y_pred_price_actual = scaler.inverse_transform(
-    np.hstack((y_pred_price, np.zeros((len(y_pred_price), len(features)-1))))
+    np.hstack((y_pred_price, np.zeros((len(y_pred_price), len(STOCK_FEATURES)-1))))
 )[:,0]
 
 y_test_price_actual = scaler.inverse_transform(
-    np.hstack((y_price_test.reshape(-1,1), np.zeros((len(y_price_test), len(features)-1))))
+    np.hstack((y_price_test.reshape(-1,1), np.zeros((len(y_price_test), len(STOCK_FEATURES)-1))))
 )[:,0]
 
 y_pred_dir = model_dir.predict(X_test).flatten()

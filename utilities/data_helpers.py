@@ -28,11 +28,20 @@ def fetch_data(symbol, start="2016-01-01", end=None):
 
 
 # === Load Data ===
+# def load_data(symbol, folder):
+#     filepath = os.path.join(folder, f"{symbol}.csv")
+#     if os.path.exists(filepath):
+#         print(f"📂 Loading existing data for {symbol} from {filepath}")
+#         file = pd.read_csv(filepath, index_col="Date", parse_dates=True)
+#         return file
+#     return None
 def load_data(symbol, folder):
     filepath = os.path.join(folder, f"{symbol}.csv")
     if os.path.exists(filepath):
         print(f"📂 Loading existing data for {symbol} from {filepath}")
-        return pd.read_csv(filepath, index_col="Date", parse_dates=True)
+        # Read with two header rows and set "Date" as index
+        file = pd.read_csv(filepath, header=[0, 1], index_col=0, parse_dates=True)
+        return file
     return None
 
 
@@ -65,11 +74,13 @@ def update_stock(symbol, start="2016-01-01", end=None, folder_path="stock_data")
 # === Example Usage ===
 if __name__ == "__main__":
     # 👇 CHANGE this to your actual Google Drive local path
-    GDRIVE_PATH = "/Users/yourusername/Library/CloudStorage/GoogleDrive-your@email/My Drive"
-    storage_folder = "stock_data"
-    symbols = ["AAPL", "AMD"]
+    EXTERNAL_DRIVE_PATH = "/Volumes/Bairon/ModalTrain/Data"
+    # storage_folder = "Data"
+    symbols = ["AAPL", "AMD", "MSFT", "^VIX"]
 
-    for sym in symbols:
-        df = update_stock(sym, start="2016-01-01", end="2024-01-01",
-                          folder=storage_folder, gdrive_path=GDRIVE_PATH)
+    for symbol in symbols:
+        df = update_stock(symbol, start="2019-11-01", end="2024-01-01",
+                          folder_path=EXTERNAL_DRIVE_PATH)
         print(df.tail())
+        # stock = load_data(symbol, EXTERNAL_DRIVE_PATH)
+        # print(stock.tail())
