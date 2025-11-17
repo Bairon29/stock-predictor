@@ -13,7 +13,7 @@ from data_helpers import (
 
 if __name__ == "__main__":
     df = load_data(
-        symbol="2025-10-03-WatchListScanner",
+        symbol="2025-10-03-WatchListScanner-copy",
         folder="/Volumes/Bairon/ModalTrain/Stock_scans_exports",
         has_multi_level_headers=True,
         index_col=0,  # Use first column as index if "Symbol" is not found
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # Load existing summary if exists to preserve data
     existing_summary_path = "/Volumes/Bairon/ModalTrain/DataTestWorkSpace"
     existing_df = load_data(
-        symbol="Watchlist_summary",
+        symbol="Watchlist_summary222",
         folder=existing_summary_path,
         has_multi_level_headers=False,
         index_col=0,  # Use first column as index if "Symbol" is not found
@@ -40,8 +40,6 @@ if __name__ == "__main__":
     existing_df = strip_whitespace_columns(existing_df)
     # make sure index is named 'Symbol' so reset_index produces that column name
     existing_df = set_dataframe_index(existing_df, 'Symbol')
-    # move index into a column
-    # existing_df = reset_dataframe_index(existing_df)
     # Print existing dataframe
     print("\n ============= Existing DataFrame ============= \n")
     print(existing_df)
@@ -64,7 +62,9 @@ if __name__ == "__main__":
     # out_filepath = os.path.join("/Volumes/Bairon/ModalTrain/Stock_scans_exports", "Watchlist_summary.csv")
     # out.to_csv(out_filepath, index=False)
     # print("Saved:", out_filepath)
-    save_data(new_update_df[["Description", "daily_start", "daily_end", "1min_start", "1min_end"]], "Watchlist_summary222", "/Volumes/Bairon/ModalTrain/DataTestWorkSpace", index=False)
+    # move index into a column
+    new_update_df = reset_dataframe_index(new_update_df)
+    save_data(new_update_df[["Symbol", "Description", "daily_start", "daily_end", "1min_start", "1min_end"]], "Watchlist_summary333", "/Volumes/Bairon/ModalTrain/DataTestWorkSpace", index=False)
     # print(out)
 
     # print a specific column
